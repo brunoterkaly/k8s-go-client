@@ -79,6 +79,9 @@ func main() {
     fmt.Println("done!")
 
 }
+//-------------------------------------------------------------------------
+//
+//-------------------------------------------------------------------------
 func showPodsByNodes(data Data) {
     for key, _ := range data.podsByNode {
         fmt.Println("----------")
@@ -95,6 +98,9 @@ func showPodsByNodes(data Data) {
         }
     }
 }
+//-------------------------------------------------------------------------
+//
+//-------------------------------------------------------------------------
 func showPodsByNamespace(data Data) {
     for key, _ := range data.podsByNamespace{
         fmt.Println("----------")
@@ -111,6 +117,9 @@ func showPodsByNamespace(data Data) {
         }
     }
 }
+//-------------------------------------------------------------------------
+//
+//-------------------------------------------------------------------------
 func mapPodsToNodes(data Data, client *kubernetes.Clientset, wg *sync.WaitGroup) {
 
     defer wg.Done()
@@ -143,6 +152,9 @@ func mapPodsToNodes(data Data, client *kubernetes.Clientset, wg *sync.WaitGroup)
     }
 }
 
+//-------------------------------------------------------------------------
+//
+//-------------------------------------------------------------------------
 func mapPodsToNamespaces(data Data, client *kubernetes.Clientset, wg *sync.WaitGroup) {
     defer wg.Done()
     var myPods MyPods
@@ -172,6 +184,9 @@ func mapPodsToNamespaces(data Data, client *kubernetes.Clientset, wg *sync.WaitG
         }
     }
 }
+//-------------------------------------------------------------------------
+//
+//-------------------------------------------------------------------------
 func getKubeConfig() *rest.Config {
     kubeconfig := ""
     flag.StringVar(&kubeconfig, "kubeconfig", kubeconfig, "kubeconfig file")
