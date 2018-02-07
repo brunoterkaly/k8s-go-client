@@ -10,6 +10,7 @@ import (
 	"os"
 	v1types "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/api/core/v1"
+	"sync"
 )
 
 type MyPods []MyPod
@@ -25,7 +26,7 @@ type Data struct {
 
 type MyPod struct {
 	ID         string
-	labels     []string
+	namespace  string
 	containers []string
 	images     []string
 }
@@ -68,9 +69,58 @@ func main() {
 		data.podsByNamespace[ns.Name] = MyPods{}
 		fmt.Printf("Namespace: %s\n", ns.Name)
 	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go mapPodsToNodes(data, client, &wg)
+	go mapPodsToNamespaces(data, client, &wg)
+	wg.Wait()
+    showPodsByNodes(data)
+    showPodsByNamespace(data)
+	fmt.Println("done!")
 
+}
+func showPodsByNodes(data Data) {
+	for key, _ := range data.podsByNode {
+		fmt.Println("----------")
+		fmt.Printf("Node Name = %v\n", key)
+		// Find matching key by looping through all pods
+		for _, poditem := range data.podsByNode[key] {
+		    fmt.Println("  ----------")
+			fmt.Printf("  Pod Name = %v (%v)\n", poditem.ID, poditem.namespace)
+            for i := range poditem.containers {
+		        fmt.Println("    ----------")
+			    fmt.Printf("     Container Name = %v\n", poditem.containers[i])
+			    fmt.Printf("     Image Name = %v\n", poditem.images[i])
+            }
+		}
+	}
+}
+func showPodsByNamespace(data Data) {
+	for key, _ := range data.podsByNamespace{
+		fmt.Println("----------")
+		fmt.Printf("Namespace = %v\n", key)
+		// Find matching key by looping through all pods
+		for _, poditem := range data.podsByNamespace[key] {
+		    fmt.Println("  ----------")
+			fmt.Printf("  Pod Name = %v\n", poditem.ID)
+            for i := range poditem.containers {
+		        fmt.Println("    ----------")
+			    fmt.Printf("     Container Name = %v\n", poditem.containers[i])
+			    fmt.Printf("     Image Name = %v\n", poditem.images[i])
+            }
+		}
+	}
+}
+func mapPodsToNodes(data Data, client *kubernetes.Clientset, wg *sync.WaitGroup) {
+
+	defer wg.Done()
 	// Get a list the pods
+
 	podlist, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error listing pods %v", err)
+		os.Exit(1)
+	}
 
 	// ----------------------------------------------------------------
 	// Loop through pods and and map to node names
@@ -79,7 +129,7 @@ func main() {
 	for _, poditem := range podlist.Items {
 
 		// Got a pod
-		newMyPod := MyPod { ID: poditem.Name }
+		newMyPod := MyPod{ID: poditem.Name, namespace: poditem.Namespace}
 		// Each pod has 1 or more containers with images
 		for _, containeritem := range poditem.Spec.Containers {
 			// For each pod, get all the containers and images
@@ -91,8 +141,16 @@ func main() {
 		// Add collection to podsByNode map, using NodeName as map key
 		data.podsByNode[poditem.Spec.NodeName] = myPods
 	}
-	// Clear collection of pods
-	myPods = myPods[:0]
+}
+
+func mapPodsToNamespaces(data Data, client *kubernetes.Clientset, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var myPods MyPods
+	podlist, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error listing pods %v", err)
+		os.Exit(1)
+	}
 	// Loop through all namespace keys (Namespace) in map
 	for key, _ := range data.podsByNamespace {
 		// Find matching key by looping through all pods
@@ -100,10 +158,11 @@ func main() {
 			// If current pod has matching namespace, then add to pod collection
 			if poditem.Namespace == key {
 				// Found match so get info about current pod
-				newMyPod := MyPod { ID: poditem.Name }
+		        newMyPod := MyPod{ID: poditem.Name, namespace: poditem.Namespace}
 				// Add all containers and images
 				for _, containeritem := range poditem.Spec.Containers {
 					newMyPod.containers = append(newMyPod.containers, containeritem.Name)
+					//fmt.Println(containeritem.Name)
 					newMyPod.images = append(newMyPod.images, containeritem.Image)
 				}
 				// Add collection to map using Namespace as key
@@ -111,12 +170,7 @@ func main() {
 				data.podsByNamespace[poditem.Namespace] = myPods
 			}
 		}
-		// After finish a namespace, clear the pods in collection
-		// to start over
-		myPods = myPods[:0]
-
 	}
-
 }
 func getKubeConfig() *rest.Config {
 	kubeconfig := ""
